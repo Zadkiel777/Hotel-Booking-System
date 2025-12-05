@@ -43,6 +43,7 @@
             font-weight: 500;
         }
 
+        /* Updated input styling to handle file inputs better */
         input, select {
             padding: 10px 12px;
             margin-bottom: 18px;
@@ -50,6 +51,14 @@
             border-radius: 6px;
             font-size: 15px;
             transition: border-color 0.3s;
+            width: 100%; /* Ensure full width */
+            box-sizing: border-box; /* Fix padding issues */
+        }
+        
+        /* Specific styling for file input */
+        input[type="file"] {
+            padding: 6px; /* Slightly less padding for file input */
+            background-color: #f8f9fa;
         }
 
         input:focus, select:focus {
@@ -81,6 +90,8 @@
         .btn-secondary {
             background-color: #6c757d;
             color: white;
+            text-decoration: none; /* Fix link styling */
+            display: inline-block;
         }
 
         .btn-secondary:hover {
@@ -117,8 +128,14 @@
 <div class="container">
     <h2>Add New Room</h2>
 
-    <form method="POST" action="{{ route('save_room') }}">
+    {{-- ✅ IMPORTANT: Added enctype="multipart/form-data" for file upload --}}
+    <form method="POST" action="{{ route('save_room') }}" enctype="multipart/form-data">
         @csrf
+
+        {{-- ✅ New Picture Input --}}
+        <label>Room Picture</label>
+        <input type="file" name="picture" accept="image/*">
+        @error('picture') <span class="error-message">{{ $message }}</span> @enderror
 
         <label>Room Number</label>
         <input type="text" name="room_number" placeholder="Enter Room number" required value="{{ old('room_number') }}">

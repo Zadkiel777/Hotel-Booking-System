@@ -43,10 +43,46 @@
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-bed mr-1"></i> Edit Room Information</h3>
                     </div>
-                    <form method="POST" action="{{ route('updateRoom', $room->id) }}">
+                    
+                    {{-- ✅ Added enctype for file upload --}}
+                    <form method="POST" action="{{ route('updateRoom', $room->id) }}" enctype="multipart/form-data">
                         @csrf
                         @method('PUT')
                         <div class="card-body">
+                            
+                            {{-- ✅ New Section: Display Current Image --}}
+                            <div class="form-group text-center">
+                                <label>Current Picture</label><br>
+                                @if(!empty($room->picture))
+                                    <img src="{{ asset($room->picture) }}" 
+                                         alt="Current Room Image" 
+                                         class="img-thumbnail" 
+                                         style="width: 200px; height: 150px; object-fit: cover;">
+                                @else
+                                    <img src="{{ asset('images/default_room.png') }}" 
+                                         alt="Default Image" 
+                                         class="img-thumbnail" 
+                                         style="width: 200px; height: 150px; object-fit: cover;">
+                                @endif
+                            </div>
+
+                            {{-- ✅ New Section: Upload New Image --}}
+                            <div class="form-group">
+                                <label for="picture"><i class="fas fa-image mr-1"></i> Update Picture</label>
+                                <div class="input-group">
+                                    <div class="custom-file">
+                                        <input type="file" class="custom-file-input" id="picture" name="picture" accept="image/*">
+                                        <label class="custom-file-label" for="picture">Choose file</label>
+                                    </div>
+                                </div>
+                                <small class="form-text text-muted">Leave blank if you don't want to change the picture.</small>
+                                @error('picture')
+                                    <span class="text-danger">{{ $message }}</span>
+                                @enderror
+                            </div>
+
+                            <hr>
+
                             <div class="form-group">
                                 <label for="room_number"><i class="fas fa-door-open mr-1"></i> Room Number</label>
                                 <input type="text" 
@@ -104,7 +140,15 @@
 
 @section('scripts')
 <script src="{{ asset('js/swift-alerts.js') }}"></script>
+{{-- bs-custom-file-input helps show the filename when selected in Bootstrap 4 --}}
+<script src="https://cdn.jsdelivr.net/npm/bs-custom-file-input/dist/bs-custom-file-input.min.js"></script>
+
 <script>
+    // Initialize custom file input to show filename
+    $(document).ready(function () {
+        bsCustomFileInput.init();
+    });
+
     function confirmUpdateRoom(event) {
         event.preventDefault();
         const form = event.target.closest('form');
@@ -137,4 +181,3 @@
     @endif
 </script>
 @endsection
-

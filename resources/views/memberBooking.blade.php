@@ -14,7 +14,7 @@
     <style>
         body {
             min-height: 100vh;
-            background: url('{{ asset('images/Luxury Room.jpg') }}') center/cover fixed no-repeat;
+            background: url('{{ asset('images/pool.jpg') }}') center/cover fixed no-repeat;
             font-family: 'Poppins', sans-serif;
             color: #f8fafc;
             display: flex;

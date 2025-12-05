@@ -418,8 +418,8 @@ public function guest_book_room(Request $request)
             'email' => $request->email,
             'contact' => $request->phone,
             'customer_type' => 'Guest',
-            'password' => Hash::make('welcome123'),
-            'dob' => date('Y-m-d'),
+            'password' => '', // No password for guest accounts
+            'dob' => null,
             'profile' => 'images/default_profile.png',
             'created_at' => now()
         ]);
@@ -499,7 +499,7 @@ public function member_book_room(Request $request)
         ->where('room_type', $request->room_type)
         ->where(function($q) {
             $q->where('status', 'Available')
-              ->orWhere('status', 'available');
+            ->orWhere('status', 'available');
         })
         ->first();
 
@@ -575,28 +575,64 @@ public function member_book_room(Request $request)
 
     public function save_room(Request $request)
     {
-    $request->validate([
-        'room_number' => ['required', 'string', 'max:255', 'unique:room,room_number'],
-        'room_type' => ['required', 'string', 'max:255'],
-        'status' => ['required', 'string', 'max:255'],
-    ]);
+        // 1. Validate the input
+        $request->validate([
+            'picture'     => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif', 'max:5120'], // Max 5MB
+            'room_number' => ['required', 'string', 'max:255', 'unique:room,room_number'],
+            'room_type'   => ['required', 'string', 'max:255'],
+            'status'      => ['required', 'string', 'max:255'],
+        ]);
 
-    DB::table('room')->insert([
-        'room_number' => $request->room_number,
-        'room_type' => $request->room_type,
-        'status' => $request->status,
-    ]);
-    
-    // Log activity
-    $adminId = Session::get('id');
-    if ($adminId) {
-        $this->logActivity($adminId, 'Room Added', "Added new room: {$request->room_number} ({$request->room_type})", null, 'room');
+        // 2. Set a Default Image Path (Optional)
+        // If they don't upload a picture, you might want a placeholder.
+        // Ensure you have a default image at public/images/default_room.png, or set this to null.
+        $picturePath = 'images/default_room.png'; 
+
+        // 3. Handle the File Upload
+        if ($request->hasFile('picture')) {
+            $file = $request->file('picture');
+            
+            // Define where you want to store room images
+            $uploadPath = public_path('uploads/rooms');
+            
+            // Create the directory if it does not exist
+            if (!file_exists($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+            
+            // Generate a unique filename to prevent overwriting
+            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            
+            // Move the file to the public/uploads/rooms folder
+            $file->move($uploadPath, $filename);
+            
+            // Update the variable to the new path to save in DB
+            $picturePath = 'uploads/rooms/' . $filename;
+        }
+
+        // 4. Insert Data into Database
+        DB::table('room')->insert([
+            'picture'     => $picturePath, // We save the string path here
+            'room_number' => $request->room_number,
+            'room_type'   => $request->room_type,
+            'status'      => $request->status,
+        ]);
+        
+        // 5. Log activity
+        $adminId = Session::get('id');
+        if ($adminId) {
+            $this->logActivity(
+                $adminId, 
+                'Room Added', 
+                "Added new room: {$request->room_number} ({$request->room_type})", 
+                null, 
+                'room'
+            );
+        }
+        
+        $request->session()->flash('save_room');
+        return redirect()->route('addroom')->with('success', 'Room added successfully!');
     }
-    
-    $request->session()->flash('save_room');
-    return redirect()->route('addroom')->with('success', 'Room added successfully!');
-}
-
 
 
 
@@ -677,60 +713,83 @@ public function save_user(Request $request)
 
 
 
-    public function auth_user(Request $request){
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
+   public function auth_user(Request $request){
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required',
+    ]);
 
-        $email = $request->email;
-        $pass = $request->password;
-        $loginType = $request->input('login_type'); // 'admin' or 'customer' from the form
+    $email = $request->email;
+    $pass = $request->password;
+    $loginType = $request->input('login_type'); // 'admin' or 'customer'
 
-        // If login_type is admin, ONLY check admin table
-        if ($loginType === 'admin') {
-            $check_user = DB::table('admin')
-                ->where('email', $email)
-                ->first();
-
-            if ($check_user && Hash::check($pass, $check_user->password)) {
-                Session::put('id', $check_user->id ?? $check_user->usr_id);
-                Session::put('profile', $check_user->profile ?? $check_user->usr_profile);
-                Session::put('name', $check_user->name ?? $check_user->usr_name);
-                Session::put('email', $check_user->email ?? null);
-                Session::put('role', $check_user->role ?? 'admin');
-
-                // Log login activity
-                $this->logActivity($check_user->id ?? $check_user->usr_id, 'Login', 'User logged in successfully');
-
-                return redirect()->route('dashboard');
-            }
-
-            return redirect()->back()->with('error', 'Invalid admin email or password.');
-        }
-
-        // If login_type is customer (or missing), ONLY check customers table
-        $customer = DB::table('customers')
+    // ==========================================
+    // 1. ADMIN LOGIN LOGIC
+    // ==========================================
+    if ($loginType === 'admin') {
+        $check_user = DB::table('admin')
             ->where('email', $email)
             ->first();
 
-        if ($customer && Hash::check($pass, $customer->password)) {
-            // Clear any admin session to avoid confusion
-            Session::forget(['id', 'profile', 'role']);
-
-            // Store customer-specific session data
-            Session::put('customer_id', $customer->id);
-            Session::put('name', trim(($customer->Fname ?? '') . ' ' . ($customer->Lname ?? '')) ?: $customer->email);
-            Session::put('email', $customer->email);
-            Session::put('role', $customer->customer_type ?? 'customer');
-
-            return redirect()->route('customerDashboard');
+        // CHECK A: Does the account exist?
+        if (!$check_user) {
+            return redirect()->back()->with('error', 'No admin account found with this email.');
         }
 
-        return redirect()->back()->with('error', 'Invalid email or password.');
+        // CHECK B: Is the password correct?
+        if (Hash::check($pass, $check_user->password)) {
+            // Login Success
+            Session::put('id', $check_user->id ?? $check_user->usr_id);
+            Session::put('profile', $check_user->profile ?? $check_user->usr_profile);
+            Session::put('name', $check_user->name ?? $check_user->usr_name);
+            Session::put('email', $check_user->email ?? null);
+            Session::put('role', $check_user->role ?? 'admin');
+
+            $this->logActivity($check_user->id ?? $check_user->usr_id, 'Login', 'User logged in successfully');
+
+            return redirect()->route('dashboard');
+        } else {
+            // Password incorrect
+            return redirect()->back()->with('error', 'Incorrect password for admin account.');
+        }
     }
 
+    // ... (Admin logic remains the same) ...
 
+    // ==========================================
+    // 2. CUSTOMER LOGIN LOGIC
+    // ==========================================
+    $customer = DB::table('customers')
+        ->where('email', $email)
+        ->first();
+
+    // CHECK A: Does the account exist?
+    if (!$customer) {
+        return redirect()->back()->with('error', 'No account found with this email. Please register first.');
+    }
+
+    // CHECK B: Does the account have a password? (Handle Guests)
+    // We check if the password column is null or an empty string
+    if (empty($customer->password)) {
+        return redirect()->back()->with('error', 'This account is a Guest account and does not have a password. Please contact support or register a new account.');
+    }
+
+    // CHECK C: Is the password correct?
+    if (Hash::check($pass, $customer->password)) {
+        // Login Success
+        Session::forget(['id', 'profile', 'role']); 
+
+        Session::put('customer_id', $customer->id);
+        Session::put('name', trim(($customer->Fname ?? '') . ' ' . ($customer->Lname ?? '')) ?: $customer->email);
+        Session::put('email', $customer->email);
+        Session::put('role', $customer->customer_type ?? 'customer');
+
+        return redirect()->route('customerDashboard');
+    } else {
+        // Password incorrect
+        return redirect()->back()->with('error', 'Incorrect password.');
+    }
+   }
 
 
     /**
@@ -1009,25 +1068,58 @@ public function updateRoom(Request $request, $id)
 
     $request->validate([
         'room_type' => ['required', 'string', 'max:255'],
-        'status' => ['required', 'string', 'max:255'],
+        'status'    => ['required', 'string', 'max:255'],
+        'picture'   => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif', 'max:5120'],
     ]);
 
+    // 1. Prepare Basic Data (Don't include picture yet)
+    $updateData = [
+        'room_type' => $request->room_type,
+        'status'    => $request->status,
+    ];
+
+    // 2. Handle Profile Picture Upload
+    if ($request->hasFile('picture')) {
+        $file = $request->file('picture');
+        
+        // Ensure folder exists (Force create if missing)
+        $uploadPath = public_path('uploads/rooms');
+        if (!file_exists($uploadPath)) {
+            mkdir($uploadPath, 0755, true);
+        }
+        
+        // Generate unique filename
+        $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+        
+        // Move the file
+        $file->move($uploadPath, $filename);
+        
+        // Delete old picture if it exists and isn't the default
+        // We use public_path() to find the real file location
+        if ($room->picture && file_exists(public_path($room->picture))) {
+            // Optional: Don't delete if it's a default placeholder
+            if (strpos($room->picture, 'default') === false) {
+                @unlink(public_path($room->picture));
+            }
+        }
+
+        // Add the NEW path to the update array
+        $updateData['picture'] = 'uploads/rooms/' . $filename;
+    }
+
+    // 3. Update Database
     DB::table('room')
         ->where('id', $id)
-        ->update([
-            'room_type' => $request->room_type,
-            'status' => $request->status,
-        ]);
+        ->update($updateData);
 
-    // Log activity
+    // 4. Log activity
     $adminId = Session::get('id');
     if ($adminId) {
-        $this->logActivity($adminId, 'Room Updated', "Updated room: {$room->room_number} (Type: {$request->room_type}, Status: {$request->status})", $id, 'room');
+        $this->logActivity($adminId, 'Room Updated', "Updated room: {$room->room_number}", $id, 'room');
     }
 
     return redirect()->route('rooms')->with('success', 'Room updated successfully!');
 }
-
 
 
 public function deleteRoom($id)
@@ -1077,7 +1169,7 @@ public function rooms(Request $request)
     $search = $request->input('search');
 
     $roomQuery = DB::table('room')
-        ->select('id', 'room_number', 'room_type', 'status');
+        ->select('id', 'picture', 'room_number', 'room_type', 'status');
 
     // Only apply search logic if $search is not empty
     if ($search) {

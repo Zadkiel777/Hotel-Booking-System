@@ -169,7 +169,7 @@
                 <div class="collapse navbar-collapse" id="customerNav">
                     <ul class="navbar-nav ms-auto align-items-lg-center gap-2 gap-lg-3">
                         <li class="nav-item">
-                            <a class="nav-link active" href="#overview"><i class="fas fa-gauge-high me-1"></i>Overview</a>
+                            <a class="nav-link" href="#overview"><i class="fas fa-gauge-high me-1"></i>Overview</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="#bookings"><i class="fas fa-calendar-check me-1"></i>My Bookings</a>

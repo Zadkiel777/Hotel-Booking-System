@@ -18,7 +18,7 @@
         body {
             min-height: 100vh;
             /* Ensure you have this image in your public/images folder */
-            background: url('{{ asset('images/Luxury Room.jpg') }}') center/cover fixed no-repeat;
+            background: url('{{ asset('images/hotel building.jpg') }}') center/cover fixed no-repeat;
             font-family: 'Poppins', sans-serif;
             color: #f8fafc;
         }
@@ -311,7 +311,7 @@
                     <div class="col-lg-6">
                         <h4 class="fw-bold mb-3">About Bluebird Hotel</h4>
                         <p class="text-white-50">
-                            Established in 2010, Bluebird Hotel has become a landmark of luxury and comfort in the heart of the city. 
+                            Bluebird Hotel has become a landmark of luxury and comfort in the heart of the city. 
                             Our mission is to provide an unforgettable experience where modern elegance meets traditional hospitality.
                         </p>
                         <p class="text-white-50">
